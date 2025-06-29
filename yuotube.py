@@ -1,493 +1,483 @@
+from quart import Quart, request, jsonify
 from googleapiclient.discovery import build
-import pymongo
-import _mysql_connector
-# BUILDING CONNECTION WITH YOUTUBE API
-api_key ='AIzaSyB2WyHFpvg7O5CzlctF4cLFcA8bkm8pEhg' 
-youtube = build('youtube','v3',developerKey=api_key)
-
-def chan(channle_id):
-    api_key ='AIzaSyC3Tk2zydyDZF0cQ3uFBjLNcukgrD8KXbg' 
-    youtube = build('youtube','v3',developerKey=api_key)
-    id=channle_id
-    c_d=[]
-    
-    response = youtube.channels().list(part = 'snippet,contentDetails,statistics',
-                                     id= channle_id).execute()
-    for i in response['items']:
-        data=dict(channel_Id=i['id'],
-                  channel_name=i['snippet']['title'],
-                  subscribe_count=i['statistics']['subscriberCount'],
-                  channle_view=i['statistics']['viewCount'],
-                  channel_desbribtion=i['snippet']['description'],
-                  playlist_id=i['contentDetails']['relatedPlaylists']['uploads'])
-        c_d.append(data)
-    return c_d
-channle_id='UCbEd9lNwkBGLFGz8ZxsZdVA'
-channels_detai_var1=chan(channle_id)
-
-def get_playlist_details(channel_id):
-    next_page_token = None
-    All_data = []
-
-    while True:
-        request = youtube.playlists().list(
-            part='snippet,contentDetails',
-            channelId=channel_id,
-            maxResults=50,
-            pageToken=next_page_token
-        )
-        response = request.execute()
-
-        for item in response['items']:
-            data = dict(
-                Playlist_Id=item['id'],
-                Title=item['snippet']['title'],
-                Channel_Id=item['snippet']['channelId'],
-                Channel_Name=item['snippet']['channelTitle'],
-                PublishedAt=item['snippet']['publishedAt'],
-                Video_Count=item['contentDetails']['itemCount']
-            )
-            All_data.append(data)
-
-        next_page_token = response.get('nextPageToken')
-        if next_page_token is None:
-            break
-
-    return All_data
-get_playlist_details(channle_id)
-play_list_det=get_playlist_details(channle_id)
-
-
-def vedio_de(channel_id):
-    ved_ids=[]
-    next_page_token=None
-    res = youtube.channels().list(id=channel_id,part='contentDetails').execute()
-    play_li=res['items'][0]['contentDetails']['relatedPlaylists']['uploads']
-    while True:
-            request = youtube.playlistItems().list(
-            part='snippet',
-            playlistId=play_li,
-            maxResults=50,
-            pageToken=next_page_token).execute()
-            
-            for i in range(len(request['items'])):
-                    ved_ids.append(request['items'][i]['snippet']['resourceId']['videoId'])
-            next_page_token=request.get('nextPageToken')
-            
-            if next_page_token is None:
-                    break
-                    
-    return ved_ids
-vedio_id_variable=vedio_de(channle_id)
-vedio_id_variable 
-
-def ved_details(vid_ids):
-    ved_list = []
-    for i in range(len(vid_ids)):
-        request = youtube.videos().list(
-            part="snippet,contentDetails,statistics",
-            id=vid_ids[i]
-        )
-        
-        response = request.execute()
-        
-        for i in response['items']:
-            data ={
-                    'video_id': i.get('id'),
-                    'video_name': i['snippet'].get('title', 'No title available'),
-                    'video_description': i['snippet'].get('description', 'No description available'),
-                    'tags': i['snippet'].get('tags', []),
-                    "Channel_name":i['snippet'].get('channelTitle',0),
-                    'channel_id':i['snippet'].get('channelId',0),
-                    'published_at': i['snippet'].get('publishedAt', 'Unknown'),
-                    'view_count': i['statistics'].get('viewCount', '0'),
-                    'like_count': i['statistics'].get('likeCount', '0'),
-                    'favorite_count': i['statistics'].get("favoriteCount", '0'),
-                    'comment_count': i['statistics'].get('commentCount', '0'),
-                    'duration': i['contentDetails'].get('duration', 'Unknown'),
-                    'thumbnail': i['snippet']['thumbnails']['default'].get('url', 'No thumbnail'),
-                    'caption_status': i['contentDetails'].get('caption', 'Unavailable')
-                    }
-            
-            # Append the processed video data to the list
-            ved_list.append(data)
-    
-    return ved_list
-
-ved_details(vedio_id_variable)
-vedios_details_var=ved_details(vedio_id_variable)
-vedios_details_var
-
-def comment_detail(video_id_list):  
-    all_comments = [] 
-
-    for video_id in video_id_list: 
-        next_page_token = None  
-        comments = []
-        
-        while True:
-            try:
-                request = youtube.commentThreads().list(
-                    part="snippet",
-                    videoId=video_id,  
-                    maxResults=100,
-                    pageToken=next_page_token
-                )
-                response = request.execute()
-
-                
-                for item in response['items']:
-                    data = dict(
-                        Comment_Id=item['snippet']['topLevelComment']['id'],
-                        Video_id=video_id,
-                        Comment_Text=item['snippet']['topLevelComment']['snippet']['textOriginal'],
-                        Comment_Author=item['snippet']['topLevelComment']['snippet']['authorDisplayName'],
-                        Comment_PublishedAt=item['snippet']['topLevelComment']['snippet']['publishedAt']
-                    )
-                    comments.append(data)
-
-                next_page_token = response.get('nextPageToken')
-                if next_page_token is None:
-                    break
-
-            except Exception as e:
-                print(f"An error occurred for video ID {video_id}: {e}")
-                break
-        
-        all_comments.extend(comments)  
-
-    return all_comments   
-
-commed_details_vari=comment_detail(vedio_id_variable)
-commed_details_vari
-
-def channel_deta():
-    data=dict(
-        channel_details=channels_detai_var1,
-        playlist_details=play_list_det,
-        vedio_details=vedios_details_var,
-        commed_details=commed_details_vari
-    )
-    return data
-
-channel_all_details=channel_deta()
-channel_all_details
-  
-  
-  
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+import mysql.connector
+from mysql.connector import pooling
+import pandas as pd
+import aiohttp
+import asyncio
+import logging
+import time
+from cachetools import TTLCache
+import re
 
-uri = "mongodb+srv://suryagaya07:spg1234@cluster0.lajvyca.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+app = Quart(__name__)
 
-# Create a new client and connect to the server
-client = MongoClient(uri, server_api=ServerApi('1'))
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
-# Send a ping to confirm a successful connection
+# Credentials
+YOUTUBE_API_KEY = "AIzaSyC3Tk2zydyDZF0cQ3uFBjLNcukgrD8KXbg"  # Your provided API key
+MONGODB_URI = "mongodb+srv://suryagaya07:spg1234@cluster0.lajvyca.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+MYSQL_CONFIG = {"host": "localhost", "user": "root", "password": "root", "database": "you_tube_db"}
+
+# Backend cache (TTL: 1 hour)
+cache = TTLCache(maxsize=100, ttl=3600)
+
+# Initialize connections
 try:
-    client.admin.command('ping')
-    print("Pinged your deployment. You successfully connected to MongoDB!")
+    mysql_pool = pooling.MySQLConnectionPool(pool_name="mypool", pool_size=5, **MYSQL_CONFIG)
+    logger.debug("MySQL pool created successfully")
+except mysql.connector.Error as e:
+    logger.error(f"Failed to create MySQL pool: {e}")
+    mysql_pool = None
+
+try:
+    mongo_client = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
+    mongo_client.admin.command('ping')  # Test connection
+    logger.debug("MongoDB connection established")
 except Exception as e:
-    print(e)
+    logger.error(f"Failed to connect to MongoDB: {e}")
+    mongo_client = None
+
+try:
+    youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
+    logger.debug("YouTube API client initialized")
+except Exception as e:
+    logger.error(f"Failed to initialize YouTube API: {e}")
+    youtube = None
+
+# Validate channel ID format
+def is_valid_channel_id(channel_id):
+    pattern = r'^UC[a-zA-Z0-9_-]{22}$'
+    return bool(re.match(pattern, channel_id))
+
+# Async functions
+async def fetch_channel_details(session, channel_id):
+    start_time = time.time()
+    if not is_valid_channel_id(channel_id):
+        logger.error(f"Invalid channel ID format: {channel_id}")
+        return {"error": f"Invalid channel ID: {channel_id}"}
     
-
-from pymongo import MongoClient
-def mongo_push(channel_all_details):
-   try:
-      client = MongoClient("mongodb+srv://suryagaya07:spg1234@cluster0.lajvyca.mongodb.net/?retryWrites=true&w=majority")
-      #channel_name = channel_all_details['channel_details'][0]['channel_name'].replace(' ','_')
-     # channle_id=channel_all_details['channel_details'][0]['channel_Id']
-      db = client['you_tube_db']
-      channel_details_collection = db['channel_details']
-      video_details_collection = db['video_details']
-      playlist_details_collection=db['playlist_details']
-      comment_details_collection = db['comment_details']
-      if 'channel_details' in channel_all_details:
-         channel_details_collection.insert_many(channel_all_details['channel_details'])
-      if 'playlist_details' in channel_all_details:
-         playlist_details_collection.insert_many(channel_all_details['playlist_details'])
-
-      if 'vedio_details' in channel_all_details:
-         video_details_collection.insert_many(channel_all_details['vedio_details'])
-
-      if 'commed_details' in channel_all_details:
-         comment_details_collection.insert_many(channel_all_details['commed_details'])
-      
-        # print("Inserted comment details successfully.")
-      print('insert successfully')
-   except Exception as e:
-      print('already databes exite',e)
-   #print('insert successfully')
-
-mongo_channel_id=mongo_push(channel_all_details)
-mongo_channel_id
-
-
-from pymongo import MongoClient
-import pandas as pd
-
-def get_data():
+    url = f"https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&id={channel_id}&key={YOUTUBE_API_KEY}"
     try:
-        client = MongoClient("mongodb+srv://suryagaya07:spg1234@cluster0.lajvyca.mongodb.net/?retryWrites=true&w=majority")
-
-        db = client['you_tube_db']
+        async with session.get(url) as response:
+            data = await response.json()
+            if 'error' in data:
+                logger.error(f"YouTube API error: {data['error']['message']} (code: {data['error']['code']})")
+                return {"error": f"YouTube API error: {data['error']['message']} (code: {data['error']['code']})"}
             
-        channel_details_collection = db['channel_details']
-        playlist_details_collection = db['playlist_details']
-        video_details_collection = db['video_details']
-        comment_details_collection = db['comment_details']
-        
+            channel_data = []
+            for item in data.get('items', []):
+                channel_data.append({
+                    'channel_id': item['id'],
+                    'channel_name': item['snippet']['title'],
+                    'subscribe_count': int(item['statistics'].get('subscriberCount', 0)),
+                    'channel_views': int(item['statistics'].get('viewCount', 0)),
+                    'channel_description': item['snippet'].get('description', ''),
+                    'playlist_id': item['contentDetails']['relatedPlaylists']['uploads']
+                })
+            if not channel_data:
+                logger.error(f"No data found for channel ID: {channel_id}")
+                return {"error": f"No channel data found for ID: {channel_id}"}
+            logger.debug(f"Channel fetch took {time.time() - start_time:.2f}s")
+            return channel_data
+    except aiohttp.ClientError as e:
+        logger.error(f"Network error fetching channel: {str(e)}")
+        return {"error": f"Network error: {str(e)}"}
 
-        channel_details = list(channel_details_collection.find({}, {'_id': 0}))
-        playlist_details =list(playlist_details_collection.find({}, {'_id': 0}))
-        video_details = list(video_details_collection.find({}, {'_id': 0}))
-        comment_details = list(comment_details_collection.find({}, {'_id': 0}))
-        
-        sql_channel_details = pd.DataFrame(channel_details)
-        sql_playlist_details = pd.DataFrame(playlist_details)
-        sql_video_details = pd.DataFrame(video_details)
-        sql_comment_details = pd.DataFrame(comment_details)
-        
-      
-
-        
-        print('successfully retrived data')
-        return sql_channel_details,sql_playlist_details, sql_video_details, sql_comment_details
-    except:
-        print("No matching channel found.")
-        
-
-sql_channel_details,sql_playlist_details, sql_video_details, sql_comment_details= get_data() 
-
- 
-import mysql.connector
-def sql_push(sql_channel_details,sql_playlist_details,sql_video_details,sql_comment_details):
-    mydb = mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="", 
-    )
-    print(mydb)
-    mycursor = mydb.cursor(buffered=True)
-
-    mycursor.execute('CREATE DATABASE IF NOT EXISTS you_tube_db')
-    mycursor.execute('USE you_tube_db')
-    mycursor.execute("""
-        CREATE TABLE IF NOT EXISTS channel_details (
-            channel_Id VARCHAR(50),
-            channel_name VARCHAR(50),
-            subscribe_count INT,
-            channle_view INT,
-            channel_desbribtion VARCHAR(100),
-            playlist_id VARCHAR(50)
-        )
-        """)
+async def fetch_playlist_details(session, channel_id):
+    start_time = time.time()
+    if not is_valid_channel_id(channel_id):
+        logger.error(f"Invalid channel ID format: {channel_id}")
+        return {"error": f"Invalid channel ID: {channel_id}"}
     
-    mydb.commit()
-    for _, row in sql_channel_details.iterrows():
-        sql='insert into channel_details (channel_Id,channel_name,subscribe_count,channle_view,channel_desbribtion,playlist_id)  VALUES (%s, %s, %s, %s, %s, %s)'
-        val = tuple(row)
-        mycursor.execute(sql, val)
-    mydb.commit()
+    url = f"https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&channelId={channel_id}&maxResults=50&key={YOUTUBE_API_KEY}"
+    try:
+        async with session.get(url) as response:
+            data = await response.json()
+            if 'error' in data:
+                logger.error(f"YouTube API error: {data['error']['message']} (code: {data['error']['code']})")
+                return {"error": f"YouTube API error: {data['error']['message']} (code: {data['error']['code']})"}
+            
+            playlist_data = []
+            for item in data.get('items', []):
+                playlist_data.append({
+                    'playlist_id': item['id'],
+                    'channel_id': item['snippet']['channelId'],
+                    'playlist_title': item['snippet']['title'],
+                    'playlist_description': item['snippet'].get('description', ''),
+                    'item_count': int(item['contentDetails'].get('itemCount', 0)),
+                    'published_at': item['snippet'].get('publishedAt', '')
+                })
+            logger.debug(f"Playlist fetch took {time.time() - start_time:.2f}s")
+            return playlist_data
+    except aiohttp.ClientError as e:
+        logger.error(f"Network error fetching playlists: {str(e)}")
+        return {"error": f"Network error: {str(e)}"}
 
-
-    mycursor.execute("""
-            create table if not exists playlist_details(
-            Playlist_Id VARCHAR(20),
-            Title VARCHAR(50),
-            Channel_Id VARCHAR(50),
-            Channel_Name VARCHAR(50),
-            PublishedAt DATETIME,
-            Video_Count int
-            )
-            """)
-    for _, row in sql_playlist_details.iterrows():
-        sql='insert into playlist_details (Playlist_Id,Title,Channel_Id,Channel_Name,PublishedAt,Video_Count)  VALUES (%s, %s, %s, %s, %s, %s)'
-        val = tuple(row)
-        mycursor.execute(sql, val)
-    mydb.commit()
-
-
-    mycursor.execute("""
-            CREATE TABLE IF NOT EXISTS video_details (
-                video_id VARCHAR(50),
-                video_name VARCHAR(50),
-                video_description CHAR(50),
-                tags CHAR(80),
-                Channel_name VARCHAR(50),
-                Channel_id VARCHAR(50),
-                published_at CHAR(40),
-                view_count INT(40),
-                like_count INT(20),
-                favorite_count INT(30),
-                comment_count INT(50),
-                duration VARCHAR(50),
-                thumbnail CHAR(30),
-                caption_status VARCHAR(50)
-            )
-        """)
-    mydb.commit()
-
-    for _, row in sql_video_details.iterrows():
-        row = [",".join(item) if isinstance(item, list) else item for item in row] # convert list to str
-        sql='insert into video_details (video_id,video_name,video_description,tags,Channel_name,Channel_id,published_at,view_count,like_count,favorite_count,comment_count,duration,thumbnail,caption_status)  VALUES (%s,%s, %s, %s, %s, %s, %s,%s,%s,%s,%s,%s,%s,%s)'
-        val = tuple(row)
-        mycursor.execute(sql, val)
-    mydb.commit()
-
-
-    mycursor.execute("""
-            CREATE TABLE IF NOT EXISTS comment_details (
-                Comment_Id VARCHAR(50),
-                Video_id CHAR(50),
-                Comment_Text CHAR(80),
-                Comment_Author CHAR(40),
-                Comment_PublishedAt DATETIME
-                )
-        """)
-    mydb.commit()
-
-    for _, row in sql_comment_details.iterrows():
-        sql='insert into comment_details (Comment_Id,Video_id,Comment_Text,Comment_Author,Comment_PublishedAt)  VALUES (%s, %s, %s, %s, %s)'
-        val = tuple(row)
-        mycursor.execute(sql, val)
-    mydb.commit()
+async def fetch_video_ids(session, channel_id):
+    start_time = time.time()
+    if not is_valid_channel_id(channel_id):
+        logger.error(f"Invalid channel ID format: {channel_id}")
+        return {"error": f"Invalid channel ID: {channel_id}"}
     
-def sql_questions():
-    import mysql.connector
-
-
-    mydb = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="", 
-    )
-
-    print(mydb)
-    mycursor = mydb.cursor(buffered=True)  
-
-    # What are the names of all the videos and their corresponding channels?
-    mycursor.execute('select video_name, Channel_name from video_details')
-    for i in mycursor:
-        print(i)
-
-    # Which channels have the most number of videos, and how many videos do
-    #  they have?
-    mycursor.execute('select * from video_details group by Channel_Name')
-    for i in mycursor:
-        print(i)
-    # What are the top 10 most viewed videos and their respective channels?
-    mycursor.execute('select view_count,video_name,Channel_name from video_details order by view_count desc limit 10' )
-    for i in mycursor:
-        print(i)
-    # How many comments were made on each video, and what are their
-    #  corresponding video names?
-
-    mycursor.execute('select Channel_name,video_name,comment_count from video_details group by video_id')
-    for i in mycursor:
-        print(i)
-
-    # Which videos have the highest number of likes, and what are their 
-    # corresponding channel names?
-
-    mycursor.execute('select Channel_name,like_count from video_details order by like_count desc limit 10')
-    for i in mycursor:
-        print(i)
-
-    # What is the total number of likes and dislikes for each video, and what are 
-    # their corresponding video names? 
-    mycursor.execute('select Channel_name,video_name,like_count,favorite_count from video_details group by video_id')
-    for i in mycursor:
-        print(i)
-
-    # What is the total number of views for each channel, and what are their 
-    # corresponding channel names?
-    mycursor.execute('select Channel_name,sum(view_count) from video_details group by Channel_name')
-    for i in mycursor:
-        print(i)
-
-    # What are the names of all the channels that have published videos in the year
-    #  2022?
-
-    mycursor.execute('select Channel_name,published_at from video_details where year(published_at) = 2022 group by Channel_name')
-    for i in mycursor:
-        print(i)
-
-    # What is the average duration of all videos in each channel, and what are their 
-    # corresponding channel names?
-
-    mycursor.execute('select Channel_name,avg(duration) from video_details group by Channel_name')
-    for i in mycursor:
-        print(i)
-
-    # Which videos have the highest number of comments, and what are their 
-    # corresponding channel names?
-    mycursor.execute('select Channel_name,video_name,comment_count from video_details order by comment_count desc limit 1')
-    for i in mycursor:
-        print(i)
+    if not youtube:
+        logger.error("YouTube API client not initialized")
+        return {"error": "YouTube API client not initialized"}
+    
+    try:
+        res = youtube.channels().list(id=channel_id, part='contentDetails').execute()
+        if not res.get('items'):
+            logger.error(f"No channel found for ID: {channel_id}")
+            return {"error": f"No channel found for ID: {channel_id}"}
         
+        playlist_id = res['items'][0]['contentDetails']['relatedPlaylists']['uploads']
+        video_ids = []
+        next_page_token = None
+        while True:
+            url = f"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId={playlist_id}&maxResults=50&key={YOUTUBE_API_KEY}"
+            if next_page_token:
+                url += f"&pageToken={next_page_token}"
+            async with session.get(url) as response:
+                data = await response.json()
+                if 'error' in data:
+                    logger.error(f"YouTube API error: {data['error']['message']} (code: {data['error']['code']})")
+                    return {"error": f"YouTube API error: {data['error']['message']} (code: {data['error']['code']})"}
+                
+                for item in data.get('items', []):
+                    video_ids.append(item['snippet']['resourceId']['videoId'])
+                next_page_token = data.get('nextPageToken')
+                if not next_page_token:
+                    break
+        logger.debug(f"Video IDs fetch took {time.time() - start_time:.2f}s")
+        return video_ids
+    except Exception as e:
+        logger.error(f"Error fetching video IDs: {str(e)}")
+        return {"error": f"Error fetching video IDs: {str(e)}"}
 
+async def fetch_video_details(session, video_ids):
+    start_time = time.time()
+    if isinstance(video_ids, dict) and 'error' in video_ids:
+        return video_ids
+    
+    video_list = []
+    tasks = []
+    for i in range(0, len(video_ids), 50):
+        video_id_chunk = ','.join(video_ids[i:i+50])
+        url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id={video_id_chunk}&key={YOUTUBE_API_KEY}"
+        tasks.append(session.get(url))
+    
+    responses = await asyncio.gather(*[task for task in tasks], return_exceptions=True)
+    for response in responses:
+        if isinstance(response, Exception):
+            logger.error(f"Video fetch error: {response}")
+            continue
+        data = await response.json()
+        if 'error' in data:
+            logger.error(f"YouTube API error: {data['error']['message']} (code: {data['error']['code']})")
+            continue
+        for item in data.get('items', []):
+            video_list.append({
+                'video_id': item['id'],
+                'video_name': item['snippet'].get('title', 'No title'),
+                'video_description': item['snippet'].get('description', 'No description'),
+                'tags': ','.join(item['snippet'].get('tags', [])),
+                'channel_name': item['snippet'].get('channelTitle', 'Unknown'),
+                'channel_id': item['snippet'].get('channelId', ''),
+                'published_at': item['snippet'].get('publishedAt', ''),
+                'view_count': int(item['statistics'].get('viewCount', 0)),
+                'like_count': int(item['statistics'].get('likeCount', 0)),
+                'favorite_count': int(item['statistics'].get('favoriteCount', 0)),
+                'comment_count': int(item['statistics'].get('commentCount', 0)),
+                'duration': item['contentDetails'].get('duration', 'PT0S'),
+                'thumbnail_url': item['snippet']['thumbnails']['default'].get('url', ''),
+                'caption_status': 'True' if item['contentDetails'].get('caption', '') == 'true' else 'False'
+            })
+    logger.debug(f"Video details fetch took {time.time() - start_time:.2f}s")
+    return video_list
+
+async def fetch_comment_details(session, video_ids, max_comments=100):
+    start_time = time.time()
+    if isinstance(video_ids, dict) and 'error' in video_ids:
+        return video_ids
+    
+    all_comments = []
+    comment_count = 0
+    for video_id in video_ids[:10]:  # Limit to first 10 videos for speed
+        next_page_token = None
+        while True:
+            url = f"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId={video_id}&maxResults=50&key={YOUTUBE_API_KEY}"
+            if next_page_token:
+                url += f"&pageToken={next_page_token}"
+            try:
+                async with session.get(url) as response:
+                    data = await response.json()
+                    if 'error' in data:
+                        logger.error(f"YouTube API error for comments: {data['error']['message']} (code: {data['error']['code']})")
+                        break
+                    for item in data.get('items', []):
+                        if comment_count >= max_comments:
+                            break
+                        all_comments.append({
+                            'comment_id': item['snippet']['topLevelComment']['id'],
+                            'video_id': video_id,
+                            'comment_text': item['snippet']['topLevelComment']['snippet']['textOriginal'],
+                            'comment_author': item['snippet']['topLevelComment']['snippet']['authorDisplayName'],
+                            'comment_published': item['snippet']['topLevelComment']['snippet']['publishedAt']
+                        })
+                        comment_count += 1
+                    next_page_token = data.get('nextPageToken')
+                    if not next_page_token or comment_count >= max_comments:
+                        break
+            except aiohttp.ClientError as e:
+                logger.error(f"Network error fetching comments: {str(e)}")
+                break
+    logger.debug(f"Comment fetch took {time.time() - start_time:.2f}s")
+    return all_comments
+
+# Async fetch wrapper
+async def fetch_selected_data(channel_id, data_type):
+    cache_key = f"{channel_id}_{data_type}"
+    if cache_key in cache:
+        logger.debug(f"Cache hit for {cache_key}")
+        return cache[cache_key]
+    
+    start_time = time.time()
+    async with aiohttp.ClientSession() as session:
+        if data_type == 'channel':
+            result = await fetch_channel_details(session, channel_id)
+            data = {'channel_details': result} if not isinstance(result, dict) or 'error' not in result else result
+        elif data_type == 'playlist':
+            result = await fetch_playlist_details(session, channel_id)
+            data = {'playlist_details': result} if not isinstance(result, dict) or 'error' not in result else result
+        elif data_type == 'video':
+            video_ids = await fetch_video_ids(session, channel_id)
+            data = {'video_details': await fetch_video_details(session, video_ids)}
+        elif data_type == 'comment':
+            video_ids = await fetch_video_ids(session, channel_id)
+            data = {'comment_details': await fetch_comment_details(session, video_ids)}
+        elif data_type == 'all':
+            video_ids = await fetch_video_ids(session, channel_id)
+            tasks = [
+                fetch_channel_details(session, channel_id),
+                fetch_playlist_details(session, channel_id),
+                fetch_video_details(session, video_ids),
+                fetch_comment_details(session, video_ids)
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            data = {
+                'channel_details': results[0] if not isinstance(results[0], Exception) and not isinstance(results[0], dict) else [],
+                'playlist_details': results[1] if not isinstance(results[1], Exception) and not isinstance(results[1], dict) else [],
+                'video_details': results[2] if not isinstance(results[2], Exception) and not isinstance(results[2], dict) else [],
+                'comment_details': results[3] if not isinstance(results[3], Exception) and not isinstance(results[3], dict) else []
+            }
+            if isinstance(results[0], dict) and 'error' in results[0]:
+                data = results[0]  # Propagate channel error for type=all
+        else:
+            data = {'error': 'Invalid data type'}
         
+        if not any(data.values()) and 'error' not in data:
+            data = {'error': f"No {data_type} data found for ID: {channel_id}"}
+        else:
+            cache[cache_key] = data
+        logger.debug(f"Total fetch for {data_type} took {time.time() - start_time:.2f}s")
+        return data
+
+# Store in MongoDB
+def store_in_mongodb(data):
+    if not mongo_client:
+        return {"status": "error", "message": "MongoDB not initialized"}
+    start_time = time.time()
+    db = mongo_client["you_tube_db"]
+    for key, value in data.items():
+        if value and not isinstance(value, dict):  # Skip error dicts
+            collection = db[key]
+            channel_id = value[0].get('channel_id')
+            if channel_id:
+                collection.delete_many({'channel_id': channel_id})
+            collection.insert_many(value)
+    logger.debug(f"MongoDB storage took {time.time() - start_time:.2f}s")
+    return {"status": "success", "message": "Data stored in MongoDB"}
+
+# Store in MySQL
+def store_in_mysql(data):
+    if not mysql_pool:
+        return {"status": "error", "message": "MySQL pool not initialized"}
+    start_time = time.time()
+    conn = mysql_pool.get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('CREATE DATABASE IF NOT EXISTS you_tube_db')
+        cursor.execute('USE you_tube_db')
+
+        # Define table order to satisfy foreign key dependencies
+        table_order = ['channel_details', 'playlist_details', 'video_details', 'comment_details']
         
-import streamlit as st
-import mysql.connector
-import pandas as pd
+        # Process each table in order
+        for key in table_order:
+            if key not in data or not data[key] or isinstance(data[key], dict):
+                logger.debug(f"Skipping {key} due to no data or error")
+                continue
+                
+            df = pd.DataFrame(data[key])
+            if 'published_at' in df.columns:
+                df['published_at'] = pd.to_datetime(df['published_at']).dt.strftime('%Y-%m-%d %H:%M:%S')
 
+            if key == 'channel_details':
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS channel_details (
+                        channel_id VARCHAR(50) PRIMARY KEY,
+                        channel_name VARCHAR(100),
+                        subscribe_count INT,
+                        channel_views BIGINT,
+                        channel_description TEXT,
+                        playlist_id VARCHAR(50)
+                    )
+                """)
+                values = [
+                    (row['channel_id'], row['channel_name'], row['subscribe_count'],
+                     row['channel_views'], row['channel_description'], row['playlist_id'])
+                    for _, row in df.iterrows()
+                ]
+                cursor.executemany("""
+                    INSERT IGNORE INTO channel_details 
+                    (channel_id, channel_name, subscribe_count, channel_views, channel_description, playlist_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, values)
+            elif key == 'playlist_details' and data.get('channel_details') and not isinstance(data['channel_details'], dict):
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS playlist_details (
+                        playlist_id VARCHAR(50) PRIMARY KEY,
+                        channel_id VARCHAR(50),
+                        playlist_title VARCHAR(255),
+                        playlist_description TEXT,
+                        item_count INT,
+                        published_at DATETIME,
+                        FOREIGN KEY (channel_id) REFERENCES channel_details(channel_id)
+                    )
+                """)
+                values = [
+                    (row['playlist_id'], row['channel_id'], row['playlist_title'],
+                     row['playlist_description'], row['item_count'], row['published_at'])
+                    for _, row in df.iterrows()
+                ]
+                cursor.executemany("""
+                    INSERT IGNORE INTO playlist_details 
+                    (playlist_id, channel_id, playlist_title, playlist_description, item_count, published_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, values)
+            elif key == 'video_details' and data.get('channel_details') and not isinstance(data['channel_details'], dict):
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS video_details (
+                        video_id VARCHAR(50) PRIMARY KEY,
+                        video_name VARCHAR(255),
+                        video_description TEXT,
+                        tags TEXT,
+                        channel_name VARCHAR(100),
+                        channel_id VARCHAR(50),
+                        published_at DATETIME,
+                        view_count BIGINT,
+                        like_count INT,
+                        favorite_count INT,
+                        comment_count INT,
+                        duration VARCHAR(20),
+                        thumbnail_url VARCHAR(255),
+                        caption_status VARCHAR(50),
+                        FOREIGN KEY (channel_id) REFERENCES channel_details(channel_id)
+                    )
+                """)
+                values = [
+                    (row['video_id'], row['video_name'], row['video_description'], row['tags'],
+                     row['channel_name'], row['channel_id'], row['published_at'], row['view_count'],
+                     row['like_count'], row['favorite_count'], row['comment_count'], row['duration'],
+                     row['thumbnail_url'], row['caption_status'])
+                    for _, row in df.iterrows()
+                ]
+                cursor.executemany("""
+                    INSERT IGNORE INTO video_details 
+                    (video_id, video_name, video_description, tags, channel_name, channel_id,
+                     published_at, view_count, like_count, favorite_count, comment_count,
+                     duration, thumbnail_url, caption_status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, values)
+            elif key == 'comment_details' and data.get('video_details') and not isinstance(data['video_details'], dict):
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS comment_details (
+                        comment_id VARCHAR(50) PRIMARY KEY,
+                        video_id VARCHAR(50),
+                        comment_text TEXT,
+                        comment_author VARCHAR(100),
+                        comment_published DATETIME,
+                        FOREIGN KEY (video_id) REFERENCES video_details(video_id)
+                    )
+                """)
+                values = [
+                    (row['comment_id'], row['video_id'], row['comment_text'],
+                     row['comment_author'], row['comment_published'])
+                    for _, row in df.iterrows()
+                ]
+                cursor.executemany("""
+                    INSERT IGNORE INTO comment_details 
+                    (comment_id, video_id, comment_text, comment_author, comment_published)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, values)
 
-def connect_to_db():
-    mydb = mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="",  
-        database="you_tube_db"
-    )
-    return mydb
+        conn.commit()
+        logger.debug(f"MySQL storage took {time.time() - start_time:.2f}s")
+        return {"status": "success", "message": "Data stored in MySQL"}
+    except mysql.connector.Error as e:
+        logger.error(f"MySQL storage error: {str(e)}")
+        return {"status": "error", "message": f"MySQL error: {str(e)}"}
+    except Exception as e:
+        logger.error(f"Unexpected storage error: {str(e)}")
+        return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+    finally:
+        conn.close()
 
+# Endpoints
+@app.route('/fetch/<channel_id>', methods=['GET'])
+async def fetch_data_endpoint(channel_id):
+    data_type = request.args.get('type', 'all')
+    try:
+        data = await fetch_selected_data(channel_id, data_type)
+        if 'error' in data:
+            return jsonify(data), 400
+        return jsonify(data)
+    except Exception as e:
+        logger.error(f"Fetch error for {channel_id}: {str(e)}")
+        return jsonify({"error": f"Failed to fetch {data_type} data: {str(e)}"}), 500
 
-def fetch_data(query):
-    mydb = connect_to_db()
-    mycursor = mydb.cursor()
-    mycursor.execute(query)
-    rows = mycursor.fetchall()
-    columns = [desc[0] for desc in mycursor.description]
-    df = pd.DataFrame(rows, columns=columns)
-    return df
+@app.route('/store/mongodb', methods=['POST'])
+async def store_mongodb_endpoint():
+    data = await request.get_json()
+    result = store_in_mongodb(data)
+    return jsonify(result)
 
+@app.route('/store/mysql', methods=['POST'])
+async def store_mysql_endpoint():
+    data = await request.get_json()
+    result = store_in_mysql(data)
+    return jsonify(result)
 
-st.title("YouTube Data Analysis Dashboard")
+@app.route('/query', methods=['POST'])
+async def run_query():
+    query = (await request.get_json()).get('query')
+    if not mysql_pool:
+        return jsonify({"status": "error", "message": "MySQL pool not initialized"})
+    start_time = time.time()
+    conn = mysql_pool.get_connection()
+    try:
+        df = pd.read_sql(query, conn)
+        logger.debug(f"Query took {time.time() - start_time:.2f}s")
+        return jsonify(df.to_dict(orient='records'))
+    except Exception as e:
+        logger.error(f"Query error: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)})
+    finally:
+        conn.close()
 
-
-query_options = [
-    "Video names and their corresponding channels",
-    "Channels with the most videos",
-    "Top 10 most viewed videos",
-    "Comments count per video",
-    "Videos with the highest likes",
-    "Total likes and favorites per video",
-    "Total views per channel",
-    "Channels that published videos in 2022",
-    "Average duration of videos per channel",
-    "Videos with the highest number of comments"
-]
-
-query_dict = {
-    query_options[0]: 'SELECT video_name, Channel_name FROM video_details',
-    query_options[1]: 'SELECT Channel_name, COUNT(*) AS Video_Count FROM video_details GROUP BY Channel_name ORDER BY Video_Count DESC',
-    query_options[2]: 'SELECT video_name, Channel_name, view_count FROM video_details ORDER BY view_count DESC LIMIT 10',
-    query_options[3]: 'SELECT video_name, comment_count FROM video_details',
-    query_options[4]: 'SELECT video_name, Channel_name, like_count FROM video_details ORDER BY like_count DESC LIMIT 10',
-    query_options[5]: 'SELECT video_name, like_count, favorite_count FROM video_details',
-    query_options[6]: 'SELECT Channel_name, SUM(view_count) AS Total_Views FROM video_details GROUP BY Channel_name',
-    query_options[7]: "SELECT Channel_name FROM video_details WHERE YEAR(published_at) = 2022 GROUP BY Channel_name",
-    query_options[8]: 'SELECT Channel_name, AVG(duration) AS Average_Duration FROM video_details GROUP BY Channel_name',
-    query_options[9]: 'SELECT video_name, Channel_name, comment_count FROM video_details ORDER BY comment_count DESC LIMIT 1'
-}
-
-selected_query = st.selectbox("Select a query to analyze:", query_options)
-
-if st.button("Run Query"):
-    query = query_dict[selected_query]
-    result_df = fetch_data(query)
-    st.write(f"Results for: **{selected_query}**")
-    st.dataframe(result_df)
-
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
