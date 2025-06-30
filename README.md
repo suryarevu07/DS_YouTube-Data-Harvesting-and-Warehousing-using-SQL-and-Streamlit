@@ -33,6 +33,16 @@ It extracts data like channel info, playlists, videos, and comments — and stor
 
 ## 📁 Project Structure
 
+
+## ⚙️ API Endpoints
+
+| Endpoint             | Method | Description                                |
+|----------------------|--------|--------------------------------------------|
+| `/store/mongodb`     | POST   | Store YouTube data in MongoDB              |
+| `/store/mysql`       | POST   | Store YouTube data in MySQL                |
+| `/query`             | POST   | Run custom SQL query on MySQL              |
+
+
 ## Fetch & Store in MySQL
 POST /store/mysql
 {
