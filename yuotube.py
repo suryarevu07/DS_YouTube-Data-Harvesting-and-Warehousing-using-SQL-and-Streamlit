@@ -14,21 +14,20 @@ import re
 
 app = Quart(__name__)
 
-# Set up logging
+# logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Credentials
-YOUTUBE_API_KEY = "AIzaSyC3Tk2zydyDZF0cQ3uFBjLNcukgrD8KXbg"  # Your provided API key
+
+YOUTUBE_API_KEY = "AIzaSyC3Tk2zydyDZF0cQ3uFBjLNcukgrD8KXbg"  
 MONGODB_URI = "mongodb+srv://suryagaya07:spg1234@cluster0.lajvyca.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 MYSQL_CONFIG = {"host": "localhost", "user": "root", "password": "root", "database": "you_tube_db"}
 
-# Backend cache (TTL: 1 hour)
+#cache 
 cache = TTLCache(maxsize=100, ttl=3600)
 
-# Initialize connections
-try:
-    mysql_pool = pooling.MySQLConnectionPool(pool_name="mypool", pool_size=5, **MYSQL_CONFIG)
+try:   #connections
+    mysql_pool = pooling.MySQLConnectionPool(pool_name="mypool", pool_size=5, **MYSQL_CONFIG) # why pool(Speeds up MySQL by reusing connections)
     logger.debug("MySQL pool created successfully")
 except mysql.connector.Error as e:
     logger.error(f"Failed to create MySQL pool: {e}")
@@ -36,7 +35,7 @@ except mysql.connector.Error as e:
 
 try:
     mongo_client = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
-    mongo_client.admin.command('ping')  # Test connection
+    mongo_client.admin.command('ping')  # Test
     logger.debug("MongoDB connection established")
 except Exception as e:
     logger.error(f"Failed to connect to MongoDB: {e}")
@@ -49,19 +48,25 @@ except Exception as e:
     logger.error(f"Failed to initialize YouTube API: {e}")
     youtube = None
 
-# Validate channel ID format
+#channelID
 def is_valid_channel_id(channel_id):
     pattern = r'^UC[a-zA-Z0-9_-]{22}$'
     return bool(re.match(pattern, channel_id))
 
-# Async functions
-async def fetch_channel_details(session, channel_id):
-    start_time = time.time()
+# Async functions The async nature allows multiple requests to run concurrently,
+#Asynchronously fetches channel details
+#To fetch data without blocking other operations
+async def fetch_channel_details(session, channel_id):# session: An aiohttp.ClientSession() for async HTTP requests.
+    start_time = time.time()  # measure the time taken
+    # start time to later calculate how long the fetch took
     if not is_valid_channel_id(channel_id):
         logger.error(f"Invalid channel ID format: {channel_id}")
         return {"error": f"Invalid channel ID: {channel_id}"}
     
     url = f"https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&id={channel_id}&key={YOUTUBE_API_KEY}"
+# snippet: title, description, etc.
+# contentDetails: playlists (like uploads).
+# statistics: subscriber and view counts.
     try:
         async with session.get(url) as response:
             data = await response.json()
@@ -74,12 +79,14 @@ async def fetch_channel_details(session, channel_id):
                 channel_data.append({
                     'channel_id': item['id'],
                     'channel_name': item['snippet']['title'],
-                    'subscribe_count': int(item['statistics'].get('subscriberCount', 0)),
+                    'subscribe_count': int(item['statistics'].get('subscriberCount', 0)), # get or keep 0
                     'channel_views': int(item['statistics'].get('viewCount', 0)),
                     'channel_description': item['snippet'].get('description', ''),
                     'playlist_id': item['contentDetails']['relatedPlaylists']['uploads']
                 })
             if not channel_data:
+# why logger It's used for logging debug info, errors, and status messages.
+#Helps trace issues and logs useful debugging information
                 logger.error(f"No data found for channel ID: {channel_id}")
                 return {"error": f"No channel data found for ID: {channel_id}"}
             logger.debug(f"Channel fetch took {time.time() - start_time:.2f}s")
@@ -89,12 +96,15 @@ async def fetch_channel_details(session, channel_id):
         return {"error": f"Network error: {str(e)}"}
 
 async def fetch_playlist_details(session, channel_id):
-    start_time = time.time()
+    start_time = time.time() 
+#this timer is used to measure the time taken to fetch details
     if not is_valid_channel_id(channel_id):
         logger.error(f"Invalid channel ID format: {channel_id}")
         return {"error": f"Invalid channel ID: {channel_id}"}
     
     url = f"https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&channelId={channel_id}&maxResults=50&key={YOUTUBE_API_KEY}"
+#part=snippet,contentDetails: request metadata and content info.
+#maxResults=50: get up to 50 playlists (maximum allowed per page).
     try:
         async with session.get(url) as response:
             data = await response.json()
@@ -115,19 +125,18 @@ async def fetch_playlist_details(session, channel_id):
             logger.debug(f"Playlist fetch took {time.time() - start_time:.2f}s")
             return playlist_data
     except aiohttp.ClientError as e:
+#a network problem
         logger.error(f"Network error fetching playlists: {str(e)}")
         return {"error": f"Network error: {str(e)}"}
-
+#time-consuming,
+# async allows you to fetch many channels or playlists in parallel, saving time.
 async def fetch_video_ids(session, channel_id):
-    start_time = time.time()
+# all video IDs from a channel’s uploads playlist
+    start_time = time.time()  # measure the time taken
     if not is_valid_channel_id(channel_id):
         logger.error(f"Invalid channel ID format: {channel_id}")
         return {"error": f"Invalid channel ID: {channel_id}"}
-    
-    if not youtube:
-        logger.error("YouTube API client not initialized")
-        return {"error": "YouTube API client not initialized"}
-    
+
     try:
         res = youtube.channels().list(id=channel_id, part='contentDetails').execute()
         if not res.get('items'):
@@ -135,6 +144,7 @@ async def fetch_video_ids(session, channel_id):
             return {"error": f"No channel found for ID: {channel_id}"}
         
         playlist_id = res['items'][0]['contentDetails']['relatedPlaylists']['uploads']
+#Extract the uploads playlist ID 
         video_ids = []
         next_page_token = None
         while True:
@@ -148,6 +158,7 @@ async def fetch_video_ids(session, channel_id):
                     return {"error": f"YouTube API error: {data['error']['message']} (code: {data['error']['code']})"}
                 
                 for item in data.get('items', []):
+        #Extract videoId from each playlist item
                     video_ids.append(item['snippet']['resourceId']['videoId'])
                 next_page_token = data.get('nextPageToken')
                 if not next_page_token:
@@ -171,14 +182,17 @@ async def fetch_video_details(session, video_ids):
         tasks.append(session.get(url))
     
     responses = await asyncio.gather(*[task for task in tasks], return_exceptions=True)
+#Collects all video detail  responses parallelly
     for response in responses:
         if isinstance(response, Exception):
             logger.error(f"Video fetch error: {response}")
             continue
+#If a request raised an error (network issue, timeout), log it and skip.
         data = await response.json()
         if 'error' in data:
             logger.error(f"YouTube API error: {data['error']['message']} (code: {data['error']['code']})")
             continue
+# IF YOUTUBE RETUREND error log and skip the request
         for item in data.get('items', []):
             video_list.append({
                 'video_id': item['id'],
@@ -199,14 +213,14 @@ async def fetch_video_details(session, video_ids):
     logger.debug(f"Video details fetch took {time.time() - start_time:.2f}s")
     return video_list
 
-async def fetch_comment_details(session, video_ids, max_comments=100):
+async def fetch_comment_details(session, video_ids, max_comments=100):  #video comments (up to a max of 100)
     start_time = time.time()
     if isinstance(video_ids, dict) and 'error' in video_ids:
         return video_ids
     
     all_comments = []
-    comment_count = 0
-    for video_id in video_ids[:10]:  # Limit to first 10 videos for speed
+    comment_count = 0 # count stop when max_count is reached 
+    for video_id in video_ids[:10]: # limit for reduce time
         next_page_token = None
         while True:
             url = f"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId={video_id}&maxResults=50&key={YOUTUBE_API_KEY}"
@@ -214,6 +228,7 @@ async def fetch_comment_details(session, video_ids, max_comments=100):
                 url += f"&pageToken={next_page_token}"
             try:
                 async with session.get(url) as response:
+    #session.get()	Makes async HTTP requests to YouTube.
                     data = await response.json()
                     if 'error' in data:
                         logger.error(f"YouTube API error for comments: {data['error']['message']} (code: {data['error']['code']})")
@@ -248,6 +263,7 @@ async def fetch_selected_data(channel_id, data_type):
     start_time = time.time()
     async with aiohttp.ClientSession() as session:
         if data_type == 'channel':
+#Pause execution until an asynchronous task finishes
             result = await fetch_channel_details(session, channel_id)
             data = {'channel_details': result} if not isinstance(result, dict) or 'error' not in result else result
         elif data_type == 'playlist':
@@ -266,7 +282,8 @@ async def fetch_selected_data(channel_id, data_type):
                 fetch_playlist_details(session, channel_id),
                 fetch_video_details(session, video_ids),
                 fetch_comment_details(session, video_ids)
-            ]
+            ] #Prepares 4 async tasks to run in parallel.
+            
             results = await asyncio.gather(*tasks, return_exceptions=True)
             data = {
                 'channel_details': results[0] if not isinstance(results[0], Exception) and not isinstance(results[0], dict) else [],
@@ -286,23 +303,23 @@ async def fetch_selected_data(channel_id, data_type):
         logger.debug(f"Total fetch for {data_type} took {time.time() - start_time:.2f}s")
         return data
 
-# Store in MongoDB
-def store_in_mongodb(data):
+def store_in_mongodb(data):  # mongodb 
     if not mongo_client:
         return {"status": "error", "message": "MongoDB not initialized"}
     start_time = time.time()
     db = mongo_client["you_tube_db"]
     for key, value in data.items():
-        if value and not isinstance(value, dict):  # Skip error dicts
+        if value and not isinstance(value, dict):
             collection = db[key]
             channel_id = value[0].get('channel_id')
+# This helps identify existing data to delete before inserting new data.
             if channel_id:
+        #avoids duplicates when refreshing the data.
                 collection.delete_many({'channel_id': channel_id})
             collection.insert_many(value)
     logger.debug(f"MongoDB storage took {time.time() - start_time:.2f}s")
     return {"status": "success", "message": "Data stored in MongoDB"}
 
-# Store in MySQL
 def store_in_mysql(data):
     if not mysql_pool:
         return {"status": "error", "message": "MySQL pool not initialized"}
@@ -313,16 +330,16 @@ def store_in_mysql(data):
         cursor.execute('CREATE DATABASE IF NOT EXISTS you_tube_db')
         cursor.execute('USE you_tube_db')
 
-        # Define table order to satisfy foreign key dependencies
+#order of insertion ,tables with foreign keys
         table_order = ['channel_details', 'playlist_details', 'video_details', 'comment_details']
         
-        # Process each table in order
+
         for key in table_order:
             if key not in data or not data[key] or isinstance(data[key], dict):
                 logger.debug(f"Skipping {key} due to no data or error")
                 continue
                 
-            df = pd.DataFrame(data[key])
+            df = pd.DataFrame(data[key])# row by row insertion
             if 'published_at' in df.columns:
                 df['published_at'] = pd.to_datetime(df['published_at']).dt.strftime('%Y-%m-%d %H:%M:%S')
 
@@ -342,6 +359,8 @@ def store_in_mysql(data):
                      row['channel_views'], row['channel_description'], row['playlist_id'])
                     for _, row in df.iterrows()
                 ]
+#Bulk insert using executemany() for efficiency.
+#INSERT IGNORE prevents duplicate primary key erro
                 cursor.executemany("""
                     INSERT IGNORE INTO channel_details 
                     (channel_id, channel_name, subscribe_count, channel_views, channel_description, playlist_id)
@@ -364,6 +383,7 @@ def store_in_mysql(data):
                      row['playlist_description'], row['item_count'], row['published_at'])
                     for _, row in df.iterrows()
                 ]
+                
                 cursor.executemany("""
                     INSERT IGNORE INTO playlist_details 
                     (playlist_id, channel_id, playlist_title, playlist_description, item_count, published_at)
@@ -435,11 +455,12 @@ def store_in_mysql(data):
         logger.error(f"Unexpected storage error: {str(e)}")
         return {"status": "error", "message": f"Unexpected error: {str(e)}"}
     finally:
-        conn.close()
+        conn.close() # we need to close for pool operation 
 
 # Endpoints
 @app.route('/fetch/<channel_id>', methods=['GET'])
 async def fetch_data_endpoint(channel_id):
+    
     data_type = request.args.get('type', 'all')
     try:
         data = await fetch_selected_data(channel_id, data_type)
@@ -450,19 +471,20 @@ async def fetch_data_endpoint(channel_id):
         logger.error(f"Fetch error for {channel_id}: {str(e)}")
         return jsonify({"error": f"Failed to fetch {data_type} data: {str(e)}"}), 500
 
-@app.route('/store/mongodb', methods=['POST'])
+@app.route('/store/mongodb', methods=['POST']) # define post poin1
 async def store_mongodb_endpoint():
+#Asynchronously receives the incoming JSON data from the request body.
     data = await request.get_json()
-    result = store_in_mongodb(data)
-    return jsonify(result)
+    result = store_in_mongodb(data) # calls the store_in_mongodb function with the received data.
+    return jsonify(result) #Returns a JSON response 
 
-@app.route('/store/mysql', methods=['POST'])
+@app.route('/store/mysql', methods=['POST']) # define post point 2
 async def store_mysql_endpoint():
-    data = await request.get_json()
-    result = store_in_mysql(data)
+    data = await request.get_json() # wait load income data
+    result = store_in_mysql(data) # call the store_in_mysql function with the received data.
     return jsonify(result)
 
-@app.route('/query', methods=['POST'])
+@app.route('/query', methods=['POST']) # define post point 3
 async def run_query():
     query = (await request.get_json()).get('query')
     if not mysql_pool:
@@ -470,7 +492,7 @@ async def run_query():
     start_time = time.time()
     conn = mysql_pool.get_connection()
     try:
-        df = pd.read_sql(query, conn)
+        df = pd.read_sql(query, conn) # load data from mysql into pd
         logger.debug(f"Query took {time.time() - start_time:.2f}s")
         return jsonify(df.to_dict(orient='records'))
     except Exception as e:
@@ -479,5 +501,6 @@ async def run_query():
     finally:
         conn.close()
 
-if __name__ == '__main__':
+if __name__ == '__main__': # start app
+    # app connect all ip address and port 5000
     app.run(debug=True, host='0.0.0.0', port=5000)
