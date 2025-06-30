@@ -1,40 +1,35 @@
-# YouTube Channel Data App 📺
+# 📺 YouTube Channel Data App (Flask-Async API Version)
 
-This project is a **Streamlit-based web application** that leverages the **Google YouTube Data API** to extract, store, and visualize data about YouTube channels. Users can search for channel details, view insights, and join multiple tables for deeper analysis.
+This project is a backend web application built with **Quart** (an async version of Flask), designed to fetch, store, and query **YouTube Channel Data** using the **YouTube Data API**.
+
+It extracts data like channel info, playlists, videos, and comments — and stores them in **MongoDB** (NoSQL) and **MySQL** (SQL) for querying and analysis.
 
 ---
 
 ## 🚀 Features
-1. Extract information from YouTube channels using the **Google API**.
-2. Store data in an **SQL database** for efficient retrieval.
-3. Search channel details and perform SQL joins in the Streamlit interface.
+
+- 🔍 Extract YouTube channel data (channel, playlists, videos, comments)
+- ⚡ Fully asynchronous API using `aiohttp` and `Quart`
+- 🛢️ Store data in **MySQL** and **MongoDB**
+- 📊 Run custom SQL queries via API
+- 💾 Auto caching with TTL to reduce API calls
+- ✅ Input validation and error handling
 
 ---
 
 ## 🛠️ Technologies Used
-- **Python**: Core programming language.
-- **Streamlit**: Web application framework.
-- **Google API**: To fetch YouTube channel details.
-- **MySQL**: Database for storing channel data.
-- **Pandas**: Data manipulation and analysis.
+
+| Tool/Library       | Purpose                             |
+|--------------------|--------------------------------------|
+| **Quart**          | Async Flask-style web framework      |
+| **aiohttp**        | Non-blocking API requests            |
+| **Google API**     | Fetch YouTube data                   |
+| **MySQL**          | Store normalized relational data     |
+| **MongoDB Atlas**  | Store raw JSON-like channel data     |
+| **Pandas**         | SQL querying + data formatting       |
+| **Logging**        | For debugging and tracing            |
 
 ---
 
-## 📂 Project Structure
+## 📁 Project Structure
 
-
-
-📊 Usage
-Channel Search: Input a YouTube channel ID to fetch its details.
-SQL Joins: Select tables and perform joins to view combined data.
-
-📌 Example Queries
-1) SELECT * FROM channel_details WHERE channel_id = 'UCxxxx';
-2) SELECT c.channel_name, v.video_title
-FROM channel_details c
-JOIN video_details v ON c.channel_id = v.channel_id;
-
-🌟 Acknowledgements
-* Streamlit
-* Google YouTube API
-* MySQL
