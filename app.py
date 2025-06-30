@@ -1,24 +1,24 @@
-import dash
-from dash import dcc, html, dash_table
+import dash #The framework for the web app
+from dash import dcc, html, dash_table #Components for dropdowns
 from dash.dependencies import Input, Output, State
-import dash_bootstrap_components as dbc
+import dash_bootstrap_components as dbc # for stylish
 import pandas as pd
-import requests
+import requests #To call the backend API
 import plotly.express as px
 
-# Initialize Dash app with Bootstrap
+#Dash app-Bootstrap
 app = dash.Dash(__name__, external_stylesheets=[
     'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
 ], suppress_callback_exceptions=True)
 
-# Flask API endpoint
-API_BASE_URL = "http://localhost:5000"
 
-# In-memory cache
-cache = {}
+API_BASE_URL = "http://localhost:5000" #(running on port 5000)
 
-# Define data types for dropdown
+#memorycache
+cache = {} #Avoids redundant API calls, improving performance
+
+#dropdown
 DATA_TYPES = [
     {'label': 'Channel Details', 'value': 'channel'},
     {'label': 'Playlist Details', 'value': 'playlist'},
@@ -26,7 +26,7 @@ DATA_TYPES = [
     {'label': 'Comment Details', 'value': 'comment'}
 ]
 
-# Custom styles
+#styles
 CUSTOM_CSS = {
     'background': 'linear-gradient(135deg, #1a1a1a 0%, #2c3e50 100%)',
     'textColor': '#ffffff',
@@ -36,7 +36,7 @@ CUSTOM_CSS = {
     'fontFamily': 'Inter, sans-serif'
 }
 
-# Layout
+#Layout
 app.layout = html.Div(
     style={
         'background': CUSTOM_CSS['background'],
@@ -52,10 +52,10 @@ app.layout = html.Div(
             className='text-center mb-4',
             style={'color': CUSTOM_CSS['textColor'], 'opacity': '0.8'}
         ),
-        dbc.Tabs([
+        dbc.Tabs([  #Dash Bootstrap Components to create 3 tabs
             dbc.Tab(
                 label='Data Selection',
-                tab_id='selection',
+                tab_id='selection', #Default active tab is "Data Selection"
                 tab_style={'color': CUSTOM_CSS['textColor'], 'fontWeight': '500'},
                 active_tab_style={'backgroundColor': CUSTOM_CSS['accentColor'], 'color': '#000', 'fontWeight': '600'}
             ),
@@ -73,16 +73,20 @@ app.layout = html.Div(
             )
         ], id='tabs', active_tab='selection', className='mb-4'),
         html.Div(id='tabs-content')
+        #placeholder container. When a tab is clicked, its corresponding content will be rendered here dynamically using a callback like
+        
     ]
 )
 
-# Callback for rendering tab content
-@app.callback(
+# Callback-rendering
+#a callback is a function that automatically gets called
+# when the user interacts with the app
+@app.callback( #This callback dynamically updates
     Output('tabs-content', 'children'),
     Input('tabs', 'active_tab')
 )
 def render_tab_content(tab):
-    if tab == 'selection':
+    if tab == 'selection': #user select a specific data type to fetch (channel, video, comment, etc.).
         return dbc.Card(
             dbc.CardBody([
                 html.H2('Data Selection', className='h2 mb-4'),
@@ -144,7 +148,7 @@ def render_tab_content(tab):
             style={'backgroundColor': CUSTOM_CSS['cardBg'], 'border': 'none', 'color': CUSTOM_CSS['textColor']},
             className='shadow-lg p-4'
         )
-    elif tab == 'all':
+    elif tab == 'all':#Fetch channel + playlist + video + comment data all together.
         return dbc.Card(
             dbc.CardBody([
                 html.H2('Fetch All Data', className='h2 mb-4'),
@@ -172,7 +176,7 @@ def render_tab_content(tab):
                     type='circle',
                     children=html.Div(id='fetch-all-status', className='mt-3')
                 ),
-                html.Div(id='all-data-table', className='mt-3'),
+                html.Div(id='all-data-table', className='mt-3'), #Div: Display results
                 html.Div(className='d-flex gap-3 mt-3', children=[
                     dbc.Button(
                         'Store in MongoDB',
@@ -198,7 +202,7 @@ def render_tab_content(tab):
             style={'backgroundColor': CUSTOM_CSS['cardBg'], 'border': 'none', 'color': CUSTOM_CSS['textColor']},
             className='shadow-lg p-4'
         )
-    elif tab == 'analysis':
+    elif tab == 'analysis':#Allow users to run SQL-like queries against stored data.
         questions = [
             "Names of all videos and their corresponding channels",
             "Channels with the most number of videos and their counts",
@@ -232,7 +236,7 @@ def render_tab_content(tab):
                 dcc.Loading(
                     id='query-loading',
                     type='circle',
-                    children=[
+                    children=[ #Loading: Display query result
                         html.Div(id='query-results', className='mt-3'),
                         dcc.Graph(id='query-graph', className='mt-3')
                     ]
@@ -242,7 +246,8 @@ def render_tab_content(tab):
             className='shadow-lg p-4'
         )
 
-# Callback for dropdown data fetching
+#Callback for-dropdown-fetch
+# Callback Declaration
 @app.callback(
     [Output('fetch-status', 'children'), Output('data-table', 'children')],
     Input('fetch-button', 'n_clicks'),
@@ -250,10 +255,11 @@ def render_tab_content(tab):
 )
 def fetch_dropdown_data(n_clicks, data_type, channel_id):
     if not n_clicks or not channel_id or not data_type:
-        return '', ''
+        return '', '' # do nothing. when no click 
     
     status = dbc.Alert('Fetching data...', color='warning', dismissable=False)
     try:
+        #Sends a GET request to the backend Flask/Quart API.
         response = requests.get(f"{API_BASE_URL}/fetch/{channel_id}?type={data_type}")
         response.raise_for_status()
         data = response.json()
@@ -284,7 +290,8 @@ def fetch_dropdown_data(n_clicks, data_type, channel_id):
     except requests.RequestException as e:
         return dbc.Alert(f"Error fetching data: {str(e)}", color='danger', dismissable=True), ''
 
-# Callback for dropdown data storage
+# Callback-dropdown data storage
+#this is single store mongo or sql 
 @app.callback(
     Output('store-status', 'children'),
     [Input('mongo-button', 'n_clicks'), Input('mysql-button', 'n_clicks')],
@@ -297,7 +304,7 @@ def store_dropdown_data(mongo_clicks, mysql_clicks, data_type, channel_id):
     
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
     status = dbc.Alert('Storing data...', color='warning', dismissable=False)
-    
+#Stores all fetched data in MongoDB or MySQL, with a status update
     try:
         data = cache.get(f'{data_type}_data', {})
         if not data:
@@ -384,7 +391,7 @@ def store_all_data(mongo_clicks, mysql_clicks, channel_id):
     
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
     status = dbc.Alert('Storing all data...', color='warning', dismissable=False)
-    
+#Stores all fetched data in MongoDB or MySQL, with a status update
     try:
         data = cache.get('all_data', {})
         if not data:
@@ -416,7 +423,7 @@ def store_all_data(mongo_clicks, mysql_clicks, channel_id):
 )
 def run_analysis(n_clicks, selected_question):
     if not n_clicks or not selected_question:
-        return None, px.bar()
+        return None, px.bar() # nothing 
     
     queries = {
         "Names of all videos and their corresponding channels": "SELECT video_name, channel_name FROM video_details",
@@ -513,4 +520,4 @@ def run_analysis(n_clicks, selected_question):
         return dbc.Alert(f"Error in analysis: {str(e)}", color='danger', dismissable=True), px.bar()
 
 if __name__ == '__main__':
-    app.run(debug=True, port=8050)
+    app.run(debug=True, port=8050) # allowing you to access the app at 8050
