@@ -33,3 +33,31 @@ It extracts data like channel info, playlists, videos, and comments — and stor
 
 ## 📁 Project Structure
 
+## Fetch & Store in MySQL
+POST /store/mysql
+{
+  "channel_details": [...],
+  "video_details": [...],
+  ...
+}
+##  Query MySQL Table
+POST /query
+{
+  "query": "SELECT channel_name, subscribe_count FROM channel_details"
+}
+
+ ## Sample SQL Queries
+
+ -- All videos of a specific channel
+SELECT * FROM video_details WHERE channel_id = 'UCxxxx';
+
+-- Join channels with videos
+SELECT c.channel_name, v.video_name
+FROM channel_details c
+JOIN video_details v ON c.channel_id = v.channel_id;
+
+-- Most liked videos
+SELECT video_name, like_count FROM video_details ORDER BY like_count DESC LIMIT 10;
+
+ 
+
